@@ -299,6 +299,9 @@ class Test(object):
         print(self._display_score(**kwargs))
 
     def prompt_skipped(self, **kwargs):
+        """
+        Prompt the user with the questions in the skipped list.
+        """
         if len(self.skip) > 0:
             print("Returned to skipped questions!")
         try:
