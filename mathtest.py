@@ -299,9 +299,11 @@ class Test(object):
         print(self._display_score(**kwargs))
 
     def prompt_skipped(self, **kwargs):
-        print("Returned to skipped questions!")
+        if len(self.skip) > 0:
+            print("Returned to skipped questions!")
         try:
             while len(self.skip) != 0:
+                print("Skipped\n-------")
                 self.question = self.skip.pop(0)
                 self.question.prompt(**kwargs)
                 self.score()
