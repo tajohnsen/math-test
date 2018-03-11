@@ -61,7 +61,6 @@ class Question(object):
         self.first_number = kwargs.get("first_number")
         self.second_number = kwargs.get("second_number")
         self.user_answer = kwargs.get("user_answer")
-        self.correct_answer = kwargs.get("correct_answer")
         self.valid_operators = kwargs.get("valid_operators", ["/", "*", "+", "-"])
 
     def __str__(self):
@@ -70,32 +69,50 @@ class Question(object):
 
     def _rand_question(self, **kwargs):
         # use operator that the user passed in or randomly select from the valid_operators list
+        # can specify first or second numbers with keywords 'first_number'/'second_number'
         self.operator = kwargs.get("operator", self.valid_operators[randint(0, len(self.valid_operators)-1)])
         # multiplication generates [0-9] * [0-9]
         if self.operator == "*":
-            self.first_number = randint(0, 9)
-            self.second_number = randint(0, 9)
-        # division chooses numbers that will only divide evenly
+            self.first_number = kwargs.get("first_number", randint(0, 9))
+            self.second_number = kwargs.get("second_number", randint(0, 9))
+        # division chooses numbers that will only divide evenly; won't divide by zero
         elif self.operator == "/":
-            self.second_number = randint(1, 9)
-            self.first_number = self.second_number * randint(0, 9)
+            self.second_number = kwargs.get("second_number", randint(1, 9))
+            self.first_number = kwargs.get("first_number", self.second_number * randint(0, 9))
+            # if the user wants the second number to be zero and the operator is division
+            # raise the error now. dev can handle this how they see fit. still sets the first number.
+            if self.second_number == 0:
+                raise ZeroDivisionError  # "Second number is zero in division equation."
         elif self.operator == "+":
-            self.first_number = randint(0, 19)
-            self.second_number = randint(0, 19)
+            self.first_number = kwargs.get("first_number", randint(0, 19))
+            self.second_number = kwargs.get("second_number", randint(0, 19))
         # subtraction chooses numbers that only result in positive answers (or 0)
         elif self.operator == "-":
-            self.first_number = randint(4, 19)
-            self.second_number = randint(0, self.first_number)
+            self.first_number = kwargs.get("first_number", randint(4, 19))
+            self.second_number = kwargs.get("second_number", randint(0, self.first_number))
 
     def _check(self):
+        """
+        Ensure all properties are set properly.
+        :return: Boolean
+        """
         check = self.first_number is not None and self.second_number is not None
         check = check and self.operator in self.valid_operators
+        # # opted to not check divide by zero and will raise exception instead
+        # if self.operator == '/':
+        #     # if dividing, ensure the second number is not 0.
+        #     check = check and self.second_number != 0
         return check
 
-    def _evaluate(self):
-        self.correct_answer = int(eval("{}".format(self.__str__().replace('=', ''))))
+    @property
+    def correct_answer(self):
+        if self._check():
+            return int(eval("{}".format(self.__str__().replace('=', ''))))
+        else:
+            return None
 
-    def evaluate(self):
+    @property
+    def user_answer_correct(self):
         """
         Grade the answer by comparing the user's answer to the correct answer.
         :return: Boolean if the user's answer is correct
@@ -124,21 +141,59 @@ class Question(object):
         self.first_number = None
         self.second_number = None
         self.user_answer = None
-        self.correct_answer = None
+
+    def _visualize_add_sub(self):
+        for number in (self.first_number, self.second_number):
+            print("{number:<3}: {stars}".format(number="{}:".format(number), stars='* ' * number))
+
+    def _visualize_mul_div(self):
+        if self.operator == '*':
+            num2 = self.first_number
+            num1 = self.second_number
+        if self.operator == '/':
+            num1 = self.correct_answer
+            num2 = self.second_number
+
+        # print column titles
+        sys.stdout.write("   ")
+        for y in range(num1):
+            sys.stdout.write("{:^3}".format(y+1 if self.operator == '*' else '*'))
+        print("")
+
+        for y in range(num2):
+            sys.stdout.write("{row_number}: ".format(row_number=y+1))
+            for x in range(num1):
+                display = (x+(y*num1))+1 if self.operator == '/' else '*'
+                sys.stdout.write("{number:^3}".format(number=display))
+            print("")  # newline
+
+    def visualize(self):
+        """
+        Print a graphic visualization of the equation to the screen.
+        """
+        if self._check():
+            if self.operator in '+-':
+                self._visualize_add_sub()
+            if self.operator in '*/':
+                self._visualize_mul_div()
 
     def prompt(self, **kwargs):
         """
         Prompt the user with a random equation and get their answer.
         :param operator (Optional): specify specific operator when generating a random question
+        :param first_number (Optional): specify constant first number when generating a random question
+        :param second_number (Optional): specify constant second number when generating a random question
         """
         valid = False
 
-        # if this is the first run, generate new equation
+        # if the question is missing any portions, generate new question
         if not self._check():
             self._rand_question(**kwargs)
 
-        self._evaluate()
         if self._check():
+            if kwargs.get("visualize"):
+                self.visualize()
+                print("")
             while not valid:
                 try:
                     sys.stdout.write(self.human_readable())
@@ -185,6 +240,7 @@ class Test(object):
         Reset the results of the test by clearing the list of right and wrong answers.
         """
         # delete all Question objects and replace them with a new empty list
+        self.question.reset()
         del self.right
         self.right = []
         del self.wrong
@@ -215,7 +271,7 @@ class Test(object):
         if str(self.question.user_answer) == '':
             self.skip.append(copy.deepcopy(self.question))
             print("Skipped!\n")
-        elif self.question.evaluate():
+        elif self.question.user_answer_correct:
             self.right.append(copy.deepcopy(self.question))
             print("Correct!\n")
         else:
@@ -294,25 +350,65 @@ class Test(object):
     def display_score(self, **kwargs):
         """
         Display the number of equations answered correctly and incorrectly.
-        :param columns: The number of columns per row to print to the screen.=
+        :param columns: The number of columns per row to print to the screen.
         """
         print(self._display_score(**kwargs))
 
-    def prompt_skipped(self, **kwargs):
+    def get(self, attribute):
         """
-        Prompt the user with the questions in the skipped list.
+        Return list of attribute desired.
+        :param attribute: String of list desired: right, wrong, skip
+        :return: List of questions OR List of None if invalid
         """
-        if len(self.skip) > 0:
-            print("Returned to skipped questions!")
+        return_list = [None]
+        if attribute == 'right':
+            return_list = self.right
+        if attribute == 'wrong':
+            return_list = self.wrong
+        if attribute == 'skip':
+            return_list = self.skip
+        return return_list
+
+    def prompt_list(self, question_list, **kwargs):
+        """
+        Prompt the user with the questions in the list submitted.
+
+        Warning: If submitting the list of right questions this will go on forever.
+        """
         try:
-            while len(self.skip) != 0:
-                print("Skipped\n-------")
-                self.question = self.skip.pop(0)
+            while len(question_list) != 0:
+                self.question = question_list.pop(0)
                 self.question.prompt(**kwargs)
                 self.score()
         except KeyboardInterrupt:
             print('')
             self.score()
+
+    def review_wrong(self):
+        """
+        Review questions that the user got wrong.
+        """
+        while len(self.get("wrong")) > 0 or len(self.get("skip")) > 0:
+            answer = 'x'
+            while answer.lower() not in ['y', 'n']:
+                answer = raw_input("Would you like review the questions you got wrong? (Y/N)>")
+            print("")
+            if answer.lower() == "y":
+                self.prompt_list(self.get('wrong'), visualize=True)
+                if len(self.skip) > 0:
+                    print("Returned to skipped questions!")
+                    self.prompt_list(self.get('skip'), visualize=True)
+                    self.move_skipped_to_wrong()
+            else:
+                return
+
+    def _move_skipped_to_wrong(self):
+        """
+        Move skipped questions to wrong.
+        :return:
+        """
+        while len(self.skip) > 0:
+            self.wrong.append(self.skip.pop(0))
 
     def run(self, **kwargs):
         """
@@ -322,10 +418,29 @@ class Test(object):
         :return:
         """
         for x in range(kwargs.get("questions", 25)):
-            self.question.prompt(**kwargs)
+            try:
+                self.question.prompt(**kwargs)
+            except ZeroDivisionError:
+                if kwargs.get("operator") == '/' and kwargs.get("second_number") == 0:
+                    # user chose an impossible situation
+                    print("Your settings will always divide by zero.  Exiting")
+                    return
+                else:
+                    # there's still a chance!
+                    continue
             self.score()
-        self.prompt_skipped(**kwargs)
+        if len(self.skip) > 0:
+            print("Returned to skipped questions!")
+            self.prompt_list(self.get('skip'), **kwargs)
+            self._move_skipped_to_wrong()
         self.display_score(**kwargs)
+        if len(self.get("wrong")) > 0 or len(self.get("skip")) > 0:
+            try:
+                self.review_wrong()
+            except KeyboardInterrupt:
+                raise
+            finally:
+                self.display_score()
 
 
 def arg_parse():
@@ -359,6 +474,12 @@ def arg_parse():
 
         return operator_list
 
+    def interactive_visualize():
+        answer = 'x'
+        while answer.lower() not in ['y', 'n', '']:
+            answer = raw_input("Would you like a visualization of the questions? (Y/N)>")
+        return answer.lower() == 'y'
+
     def interactive_questions():
         try:
             questions = raw_input("How many questions would you like on the test?>")
@@ -373,6 +494,8 @@ def arg_parse():
     parser = argparse.ArgumentParser(description="Math Test. Choose what kind of math problems and how many.")
     parser.add_argument("-i", "--interactive", action='store_true',
                         help="Interactively set options before starting the test.")
+    parser.add_argument("-v", "--visualize", action='store_true',
+                        help="Show visualization of equation.")
     parser.add_argument("-o", "--operator", help="Type of questions (+ - * /). No spaces if multiple.",
                         metavar="OPERATOR or OPERATORS")
     parser.add_argument("-q", "--questions", help="Number of questions.")
@@ -382,6 +505,7 @@ def arg_parse():
     if args.interactive:
         args.operator = args.operator or interactive_operators()
         args.questions = args.questions or interactive_questions()
+        args.visualize = args.visualize or interactive_visualize()
     if args.operator:
         question = Question()
         if len(args.operator) == 1 and args.operator in question.valid_operators:
@@ -410,6 +534,7 @@ def arg_parse():
         except ValueError:
             print("--columns must be a number greater than 0!")
             exit(3)
+    kwargs["visualize"] = args.visualize
     return kwargs
 
 
