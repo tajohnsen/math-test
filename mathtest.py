@@ -67,10 +67,35 @@ class Question(object):
         formula = "{n.first_number} {n.operator} {n.second_number} = ".format(n=self)
         return formula
 
-    def _rand_question(self, **kwargs):
-        # use operator that the user passed in or randomly select from the valid_operators list
-        # can specify first or second numbers with keywords 'first_number'/'second_number'
-        self.operator = kwargs.get("operator", self.valid_operators[randint(0, len(self.valid_operators)-1)])
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return self.first_number == other.first_number \
+                   and self.operator == other.operator \
+                   and self.second_number == other.second_number
+        else:
+            return False
+
+    def _check(self):
+        """
+        Ensure all properties are set properly.
+        :return: Boolean
+        """
+        check = self.first_number is not None and self.second_number is not None
+        check = check and self.operator in self.valid_operators
+        # # opted to not check divide by zero and will raise exception instead
+        # if self.operator == '/':
+        #     # if dividing, ensure the second number is not 0.
+        #     check = check and self.second_number != 0
+        return check
+
+    def generate_rand_question(self, **kwargs):
+        """
+        Generate a random equation.
+        :param operator: Optionally specify operator to use in the equation
+        :param first_number: Optionally specify the first number in equation
+        :param second_number: Optionally specify the second number in equation
+        """
+        self.operator = kwargs.get("operator", self.valid_operators[randint(0, len(self.valid_operators) - 1)])
         # multiplication generates [0-9] * [0-9]
         if self.operator == "*":
             self.first_number = kwargs.get("first_number", randint(0, 9))
@@ -91,19 +116,6 @@ class Question(object):
             self.first_number = kwargs.get("first_number", randint(4, 19))
             self.second_number = kwargs.get("second_number", randint(0, self.first_number))
 
-    def _check(self):
-        """
-        Ensure all properties are set properly.
-        :return: Boolean
-        """
-        check = self.first_number is not None and self.second_number is not None
-        check = check and self.operator in self.valid_operators
-        # # opted to not check divide by zero and will raise exception instead
-        # if self.operator == '/':
-        #     # if dividing, ensure the second number is not 0.
-        #     check = check and self.second_number != 0
-        return check
-
     @property
     def correct_answer(self):
         if self._check():
@@ -117,7 +129,10 @@ class Question(object):
         Grade the answer by comparing the user's answer to the correct answer.
         :return: Boolean if the user's answer is correct
         """
-        return self.user_answer == self.correct_answer
+        if self.user_answer is None:
+            return False
+        else:
+            return self.user_answer == self.correct_answer
 
     def values(self):
         """
@@ -188,7 +203,7 @@ class Question(object):
 
         # if the question is missing any portions, generate new question
         if not self._check():
-            self._rand_question(**kwargs)
+            self.generate_rand_question(**kwargs)
 
         if self._check():
             if kwargs.get("visualize"):
@@ -267,17 +282,19 @@ class Test(object):
     def score(self):
         """
         Score the equation by comparing the user's answer to the correct answer.
+        Does nothing if the question isn't answered.
         """
-        if str(self.question.user_answer) == '':
-            self.skip.append(copy.deepcopy(self.question))
-            print("Skipped!\n")
-        elif self.question.user_answer_correct:
-            self.right.append(copy.deepcopy(self.question))
-            print("Correct!\n")
-        else:
-            self.wrong.append(copy.deepcopy(self.question))
-            print("Wrong! ({})\n".format(self.question.correct_answer))
-        self.question.reset()
+        if self.question.user_answer is not None:
+            if str(self.question.user_answer) == '':
+                self.skip.append(copy.deepcopy(self.question))
+                print("Skipped!\n")
+            elif self.question.user_answer_correct:
+                self.right.append(copy.deepcopy(self.question))
+                print("Correct!\n")
+            else:
+                self.wrong.append(copy.deepcopy(self.question))
+                print("Wrong! ({})\n".format(self.question.correct_answer))
+            self.question.reset()
 
     @staticmethod
     def _rows_str(equation_list, columns=5):
@@ -313,6 +330,7 @@ class Test(object):
                     for y in range(columns if x + columns < (len(correct)) else len(correct) - x):
                         return_string += "({:>2}) ".format(int(correct[x + y]))
                     return_string += '\b\n'
+                return_string += '\n'  # extra new line separator
         return return_string
 
     def print_rows(self, equation_list, columns=5):
@@ -329,7 +347,7 @@ class Test(object):
         :param columns: The number of columns per row to print to the screen.
         """
         skipped = len(self.skip)
-        test_string = '\n{}\n'.format('-' * 80)
+        test_string = '\n{}\n\n'.format('-' * 80)
         test_string += "Right    Wrong{}\n".format('' if skipped == 0 else "   Skipped")
         test_string += "-----    -----{}\n".format('' if skipped == 0 else "   -------")
         test_string += "{:^5}    {:^5}{}\n".format(len(self.right), len(self.wrong),
@@ -410,15 +428,69 @@ class Test(object):
         while len(self.skip) > 0:
             self.wrong.append(self.skip.pop(0))
 
+    def _total_possible_questions(self, **kwargs):
+        return len(self._all_questions(**kwargs))
+
+    def _all_questions(self, **kwargs):
+        all_questions = []
+        operation_ranges = {
+            "*": [(0, 9+1), (0, 9+1)],
+            "/": [(0, 9+1), (1, 9+1)],
+            "+": [(0, 19+1), (0, 19+1)],
+            "-": [(4, 19+1), (0, "first_number")],
+        }
+
+        operators = kwargs.get("operator", self.question.valid_operators)
+        custom_first_number = kwargs.get('first_number')
+        custom_second_number = kwargs.get('second_number')
+        for operator in operators:
+            if custom_first_number is not None:
+                operation_ranges[operator][0] = (custom_first_number, custom_first_number+1)
+            if custom_second_number is not None:
+                operation_ranges[operator][1] = (custom_second_number, custom_second_number+1)
+            first_range = operation_ranges[operator][0]
+            for first_number in range(*first_range):
+                # if operator is subtraction, only generate equations with positive results
+                if operator == '-':
+                    second_range = (operation_ranges[operator][1][0], first_number+1)
+                else:
+                    second_range = operation_ranges[operator][1]
+                for second_number in range(*second_range):
+                    if operator == '/':
+                        first_number_value = first_number * second_number
+                    else:
+                        first_number_value = first_number
+                    all_questions.append(
+                        Question(
+                            first_number=first_number_value,
+                            second_number=second_number,
+                            operator=operator,
+                            valid_operators=kwargs.get("valid_operators", Question().valid_operators)
+                        )
+                    )
+        return all_questions
+
     def run(self, **kwargs):
         """
         Run the test by prompting user, scoring the answer, and finally displaying the score.
         :param questions: Optional number of questions to ask.  Default 25.
+        :param unique: Optional Boolean to generate unique, one of a kind questions.
         :param kwargs: keyword arguments to pass Question.prompt and display_score.
         :return:
         """
-        for x in range(kwargs.get("questions", 25)):
+        all_questions = []  # all possible questions, only generated if this is unique
+        number_of_questions = kwargs.get("questions", 25)
+        for x in range(number_of_questions):
             try:
+                if kwargs.get("unique"):
+                    # if we haven't generated the whole list
+                    # will also run if we finished the old list
+                    if len(all_questions) == 0:
+                        all_questions = self._all_questions(**kwargs)
+                    self.question = all_questions.pop(randint(0, len(all_questions)-1))
+                else:
+                    self.question.generate_rand_question(**kwargs)
+                print("Question {} of {}:".format(x+1, number_of_questions))
                 self.question.prompt(**kwargs)
             except ZeroDivisionError:
                 if kwargs.get("operator") == '/' and kwargs.get("second_number") == 0:
@@ -496,9 +568,13 @@ def arg_parse():
                         help="Interactively set options before starting the test.")
     parser.add_argument("-v", "--visualize", action='store_true',
                         help="Show visualization of equation.")
+    parser.add_argument("-u", "--unique", action='store_true',
+                        help="Only unique questions; don't repeat unless necessary.")
     parser.add_argument("-o", "--operator", help="Type of questions (+ - * /). No spaces if multiple.",
                         metavar="OPERATOR or OPERATORS")
     parser.add_argument("-q", "--questions", help="Number of questions.")
+    parser.add_argument("-n", "--constant-number", help="Constant number for every question.",
+                        metavar="NUMBER")
     parser.add_argument("-c", "--columns", help="Number of columns to print when the test score is displayed.")
     args = parser.parse_args()
     kwargs = dict()
@@ -528,13 +604,20 @@ def arg_parse():
         except ValueError:
             print("--questions must be a number greater than 0!")
             exit(2)
+    if args.constant_number:
+        try:
+            kwargs["second_number"] = int(args.constant_number)
+        except ValueError:
+            print("--constant-number must be a number!")
+            exit(3)
     if args.columns:
         try:
             kwargs["columns"] = assign_if_greater_than_0(args.columns)
         except ValueError:
             print("--columns must be a number greater than 0!")
-            exit(3)
+            exit(4)
     kwargs["visualize"] = args.visualize
+    kwargs["unique"] = args.unique
     return kwargs
 
 
