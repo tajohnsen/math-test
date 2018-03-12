@@ -297,7 +297,7 @@ class Test(object):
             self.question.reset()
 
     @staticmethod
-    def _rows_str(equation_list, columns=5):
+    def _rows_str(equation_list, columns=16):
         """
         Print a list of equations to the screen with 5 per row maximum.
         :param equation_list: List of tuple values using format (first number, operator, second operator, user answer)
@@ -347,21 +347,23 @@ class Test(object):
         :param columns: The number of columns per row to print to the screen.
         """
         skipped = len(self.skip)
-        test_string = '\n{}\n\n'.format('-' * 80)
-        test_string += "Right    Wrong{}\n".format('' if skipped == 0 else "   Skipped")
-        test_string += "-----    -----{}\n".format('' if skipped == 0 else "   -------")
-        test_string += "{:^5}    {:^5}{}\n".format(len(self.right), len(self.wrong),
-                                                   '' if skipped == 0 else "   {:^7}".format(skipped))
+        columns = kwargs.get("columns", 16)
+        summary_format = "{{:^{}}}\n".format(columns * 5)
+        test_string = '\n{}\n\n'.format('-' * (columns * 5))
+        test_string += summary_format.format("Right    Wrong{}".format('' if skipped == 0 else "   Skipped"))
+        test_string += summary_format.format("-----    -----{}".format('' if skipped == 0 else "   -------"))
+        test_string += summary_format.format("{:^5}    {:^5}{}".format(len(self.right), len(self.wrong),
+                                                                   '' if skipped == 0 else "   {:^7}".format(skipped)))
         test_string += "\n"
         test_string += "Correct Answers:\n\n"
-        test_string += self._rows_str(self.right, columns=kwargs.get("columns", 5))
+        test_string += self._rows_str(self.right, columns=columns)
         test_string += "\n"
         test_string += "Wrong Answers:\n\n"
-        test_string += self._rows_str(self.wrong, columns=kwargs.get("columns", 5))
+        test_string += self._rows_str(self.wrong, columns=columns)
         test_string += "\n"
         if skipped != 0:
             test_string += "Skipped:\n\n"
-            test_string += self._rows_str(self.skip, columns=kwargs.get("columns", 5))
+            test_string += self._rows_str(self.skip, columns=columns)
             test_string += "\n"
         return test_string
 
@@ -480,7 +482,8 @@ class Test(object):
         """
         all_questions = []  # all possible questions, only generated if this is unique
         number_of_questions = kwargs.get("questions", 25)
-        for x in range(number_of_questions):
+        question_number = 0
+        while question_number < number_of_questions:
             try:
                 if kwargs.get("unique"):
                     # if we haven't generated the whole list
@@ -490,17 +493,21 @@ class Test(object):
                     self.question = all_questions.pop(randint(0, len(all_questions)-1))
                 else:
                     self.question.generate_rand_question(**kwargs)
-                print("Question {} of {}:".format(x+1, number_of_questions))
+                print("Question {} of {}:".format(question_number+1, number_of_questions))
                 self.question.prompt(**kwargs)
             except ZeroDivisionError:
                 if kwargs.get("operator") == '/' and kwargs.get("second_number") == 0:
                     # user chose an impossible situation
-                    print("Your settings will always divide by zero.  Exiting")
-                    return
+                    print("Your settings will always divide by zero.  Exiting.")
+                    if __name__ == '__main__':
+                        exit(0)
+                    else:
+                        return
                 else:
                     # there's still a chance!
                     continue
             self.score()
+            question_number += 1
         if len(self.skip) > 0:
             print("Returned to skipped questions!")
             self.prompt_list(self.get('skip'), **kwargs)
@@ -512,7 +519,7 @@ class Test(object):
             except KeyboardInterrupt:
                 raise
             finally:
-                self.display_score()
+                self.display_score(**kwargs)
 
 
 def arg_parse():
