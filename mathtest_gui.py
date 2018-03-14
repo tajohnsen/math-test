@@ -1,15 +1,40 @@
-from tkinter import *
-from tkinter import messagebox
-from pprint import pprint
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+#  mathtest.py
+#
+#  Copyright 2017  <tjohnsen@gmail.com>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+#
+#
 import mathtest
 import os
+import sys
 
 if sys.version_info.major == 2:
+    from Tkinter import *
+    import tkMessageBox as messagebox
     if os.name == 'nt':
         operator_translation = {ord('*'): u"x", ord('/'): u"÷"}
     else:
         operator_translation = {ord('*'): u"×", ord('/'): u"÷"}
 else:
+    from tkinter import *
+    from tkinter import messagebox
     raw_input = input
     unicode = str
     operator_translation = str.maketrans("*/", "×÷")
@@ -114,7 +139,10 @@ class QuestionWindow(Dialog):
     def __init__(self, parent, **kwargs):
         self.question = kwargs.get("question")
         self.visualize = kwargs.get("visualize", False)
-        super(QuestionWindow, self).__init__(parent, title=kwargs.get('title'))
+        if sys.version_info.major == 3:
+            super(QuestionWindow, self).__init__(parent, title=kwargs.get('title'))
+        else:
+            Dialog.__init__(self, parent)
 
     def buttonbox(self):
         # add standard button box. override if you don't want the
@@ -157,7 +185,7 @@ class QuestionWindow(Dialog):
         ).grid(row=1, column=1, sticky='w')
         Label(
             master,
-            text="{}{:>2}".format(self.question.operator.translate(operator_translation), self.question.second_number),
+            text=u"{}{:>2}".format(unicode(self.question.operator).translate(operator_translation), self.question.second_number),
             font=('courier new', 12)
         ).grid(row=2, column=1, sticky='w')
 
@@ -225,7 +253,10 @@ class QuestionWindow(Dialog):
 
 class TestGUI(Tk):
     def __init__(self, *args, **kwargs):
-        super(TestGUI, self).__init__(*args, **kwargs)
+        if sys.version_info.major == 3:
+            super(TestGUI, self).__init__(*args, **kwargs)
+        else:
+            Tk.__init__(self, *args, **kwargs)
         self.title("Math Test")
         self.display_string = StringVar()
         self.message = Message(self,
@@ -281,7 +312,7 @@ class TestGUI(Tk):
                     self.update_display(**kwargs)
                 else:
                     self.test.wrong.append(question)
-                    break
+                    return
 
     def end_test(self):
         self.update_display(showing_answers=True, final_grade=True)
