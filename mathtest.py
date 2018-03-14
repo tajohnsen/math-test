@@ -95,6 +95,7 @@ class Question(object):
         :param first_number: Optionally specify the first number in equation
         :param second_number: Optionally specify the second number in equation
         """
+        self.valid_operators = kwargs.get("valid_operators", self.valid_operators)
         self.operator = kwargs.get("operator", self.valid_operators[randint(0, len(self.valid_operators) - 1)])
         # multiplication generates [0-9] * [0-9]
         if self.operator == "*":
@@ -158,10 +159,13 @@ class Question(object):
         self.user_answer = None
 
     def _visualize_add_sub(self):
+        return_string = ''
         for number in (self.first_number, self.second_number):
-            print("{number:<3}: {stars}".format(number="{}:".format(number), stars='* ' * number))
+            return_string += "{number:<3} {stars}\n".format(number="{}:".format(number), stars='* ' * number)
+        return return_string.rstrip()
 
     def _visualize_mul_div(self):
+        return_string = ''
         if self.operator == '*':
             num2 = self.first_number
             num1 = self.second_number
@@ -170,27 +174,33 @@ class Question(object):
             num2 = self.second_number
 
         # print column titles
-        sys.stdout.write("   ")
+        return_string += "   "
         for y in range(num1):
-            sys.stdout.write("{:^3}".format(y+1 if self.operator == '*' else '*'))
-        print("")
+            return_string += "{:^3}".format(y+1 if self.operator == '*' else '*')
+        return_string += "\n"
 
         for y in range(num2):
-            sys.stdout.write("{row_number}: ".format(row_number=y+1))
+            return_string += "{row_number}: ".format(row_number=y+1)
             for x in range(num1):
                 display = (x+(y*num1))+1 if self.operator == '/' else '*'
-                sys.stdout.write("{number:^3}".format(number=display))
-            print("")  # newline
+                return_string += "{number:^3}".format(number=display)
+            return_string += '\n'
+
+        return return_string
+
+    def visualize_string(self):
+
+        if self._check():
+            if self.operator in '+-':
+                return self._visualize_add_sub()
+            if self.operator in '*/':
+                return self._visualize_mul_div()
 
     def visualize(self):
         """
         Print a graphic visualization of the equation to the screen.
         """
-        if self._check():
-            if self.operator in '+-':
-                self._visualize_add_sub()
-            if self.operator in '*/':
-                self._visualize_mul_div()
+        print(self.visualize_string())
 
     def prompt(self, **kwargs):
         """
@@ -236,7 +246,7 @@ class Test(object):
         self.question = Question(**kwargs)
 
     def __str__(self):
-        return self._display_score()
+        return self.display_string()
 
     @property
     def grade(self):
@@ -287,17 +297,17 @@ class Test(object):
         if self.question.user_answer is not None:
             if str(self.question.user_answer) == '':
                 self.skip.append(copy.deepcopy(self.question))
-                print("Skipped!\n")
+                return "Skipped!\n"
             elif self.question.user_answer_correct:
                 self.right.append(copy.deepcopy(self.question))
-                print("Correct!\n")
+                return "Correct!\n"
             else:
                 self.wrong.append(copy.deepcopy(self.question))
-                print("Wrong! ({})\n".format(self.question.correct_answer))
+                return "Wrong! ({})\n".format(self.question.correct_answer)
             self.question.reset()
 
     @staticmethod
-    def _rows_str(equation_list, columns=16):
+    def _rows_str(equation_list, columns=16, showing_answers=True):
         """
         Print a list of equations to the screen with 5 per row maximum.
         :param equation_list: List of tuple values using format (first number, operator, second operator, user answer)
@@ -315,21 +325,21 @@ class Test(object):
             for x in range(0, len(highs), columns):
                 for y in range(columns if x + columns < (len(highs)) else len(highs) - x):
                     return_string += "{:>3}  ".format(highs[x + y])
-                return_string += '\b\n'
+                return_string += '\n'
                 for y in range(columns if x + columns < (len(lows)) else len(lows) - x):
                     return_string += u"{}  ".format(u"{}{:>2}".format(ops[x + y], lows[x + y])).translate(
                         operator_translation)
-                return_string += '\b\n'
+                return_string += '\n'
                 for y in range(columns if x + columns < (len(highs)) else len(highs) - x):
                     return_string += "---  ".format(highs[x + y])
-                return_string += '\b\n'
+                return_string += '\n'
                 for y in range(columns if x + columns < (len(answers)) else len(answers) - x):
                     return_string += "{:>3}  ".format(answers[x + y])
-                return_string += '\b\n'
-                if answers != correct:
+                return_string += '\n'
+                if answers != correct and showing_answers:
                     for y in range(columns if x + columns < (len(correct)) else len(correct) - x):
                         return_string += "({:>2}) ".format(int(correct[x + y]))
-                    return_string += '\b\n'
+                    return_string += '\n'
                 return_string += '\n'  # extra new line separator
         return return_string
 
@@ -341,7 +351,7 @@ class Test(object):
         """
         print(self._rows_str(equation_list, columns=columns))
 
-    def _display_score(self, **kwargs):
+    def display_string(self, **kwargs):
         """
         Display the number of equations answered correctly and incorrectly.
         :param columns: The number of columns per row to print to the screen.
@@ -359,11 +369,12 @@ class Test(object):
         test_string += self._rows_str(self.right, columns=columns)
         test_string += "\n"
         test_string += "Wrong Answers:\n\n"
-        test_string += self._rows_str(self.wrong, columns=columns)
+        test_string += self._rows_str(self.wrong, columns=columns, showing_answers=kwargs.get('showing_answers', False))
         test_string += "\n"
         if skipped != 0:
             test_string += "Skipped:\n\n"
-            test_string += self._rows_str(self.skip, columns=columns)
+            test_string += self._rows_str(self.skip, columns=columns, showing_answers=kwargs.get('showing_answers',
+                                                                                                 False))
             test_string += "\n"
         return test_string
 
@@ -372,15 +383,15 @@ class Test(object):
         Display the number of equations answered correctly and incorrectly.
         :param columns: The number of columns per row to print to the screen.
         """
-        print(self._display_score(**kwargs))
+        print(self.display_string(**kwargs))
 
     def get(self, attribute):
         """
         Return list of attribute desired.
         :param attribute: String of list desired: right, wrong, skip
-        :return: List of questions OR List of None if invalid
+        :return: List of questions OR empty list
         """
-        return_list = [None]
+        return_list = []
         if attribute == 'right':
             return_list = self.right
         if attribute == 'wrong':
@@ -389,6 +400,17 @@ class Test(object):
             return_list = self.skip
         return return_list
 
+    def question_list(self, question_list):
+        """
+        Yield each question from a question list.
+        After yielding the question, score it.
+        :param question_list: List of Questions
+        :yields: Question Object until the list is empty
+        """
+        while len(question_list) != 0:
+            self.question = question_list.pop(0)
+            yield self.question
+
     def prompt_list(self, question_list, **kwargs):
         """
         Prompt the user with the questions in the list submitted.
@@ -396,20 +418,19 @@ class Test(object):
         Warning: If submitting the list of right questions this will go on forever.
         """
         try:
-            while len(question_list) != 0:
-                self.question = question_list.pop(0)
-                self.question.prompt(**kwargs)
-                self.score()
+            for question in self.question_list(question_list):
+                question.prompt(**kwargs)
+                print(self.score())
         except KeyboardInterrupt:
             print('')
-            self.score()
+            print(self.score())
 
     def review_wrong(self):
         """
         Review questions that the user got wrong.
         """
+        answer = 'x'
         while len(self.get("wrong")) > 0 or len(self.get("skip")) > 0:
-            answer = 'x'
             while answer.lower() not in ['y', 'n']:
                 answer = raw_input("Would you like review the questions you got wrong? (Y/N)>")
             print("")
@@ -418,7 +439,7 @@ class Test(object):
                 if len(self.skip) > 0:
                     print("Returned to skipped questions!")
                     self.prompt_list(self.get('skip'), visualize=True)
-                    self.move_skipped_to_wrong()
+                    self._move_skipped_to_wrong()
             else:
                 return
 
@@ -442,7 +463,9 @@ class Test(object):
             "-": [(4, 19+1), (0, "first_number")],
         }
 
-        operators = kwargs.get("operator", self.question.valid_operators)
+        operators = kwargs.get("valid_operators", self.question.valid_operators)
+        operators = kwargs.get("operator", operators)
+
         custom_first_number = kwargs.get('first_number')
         custom_second_number = kwargs.get('second_number')
         for operator in operators:
@@ -472,14 +495,7 @@ class Test(object):
                     )
         return all_questions
 
-    def run(self, **kwargs):
-        """
-        Run the test by prompting user, scoring the answer, and finally displaying the score.
-        :param questions: Optional number of questions to ask.  Default 25.
-        :param unique: Optional Boolean to generate unique, one of a kind questions.
-        :param kwargs: keyword arguments to pass Question.prompt and display_score.
-        :return:
-        """
+    def get_questions(self, **kwargs):
         all_questions = []  # all possible questions, only generated if this is unique
         number_of_questions = kwargs.get("questions", 25)
         question_number = 0
@@ -490,11 +506,11 @@ class Test(object):
                     # will also run if we finished the old list
                     if len(all_questions) == 0:
                         all_questions = self._all_questions(**kwargs)
-                    self.question = all_questions.pop(randint(0, len(all_questions)-1))
+                    self.question = all_questions.pop(randint(0, len(all_questions) - 1))
                 else:
                     self.question.generate_rand_question(**kwargs)
-                print("Question {} of {}:".format(question_number+1, number_of_questions))
-                self.question.prompt(**kwargs)
+                yield question_number, self.question
+                question_number += 1
             except ZeroDivisionError:
                 if kwargs.get("operator") == '/' and kwargs.get("second_number") == 0:
                     # user chose an impossible situation
@@ -506,8 +522,21 @@ class Test(object):
                 else:
                     # there's still a chance!
                     continue
-            self.score()
-            question_number += 1
+
+    def run(self, **kwargs):
+        """
+        Run the test by prompting user, scoring the answer, and finally displaying the score.
+        :param questions: Optional number of questions to ask.  Default 25.
+        :param unique: Optional Boolean to generate unique, one of a kind questions.
+        :param kwargs: keyword arguments to pass Question.prompt and display_score.
+        :return:
+        """
+        number_of_questions = kwargs.get("questions", 25)
+        for question_number, question in self.get_questions(**kwargs):
+            print("Question {} of {}:".format(question_number + 1, number_of_questions))
+            question.prompt(**kwargs)
+            print(self.score())
+
         if len(self.skip) > 0:
             print("Returned to skipped questions!")
             self.prompt_list(self.get('skip'), **kwargs)
@@ -519,6 +548,7 @@ class Test(object):
             except KeyboardInterrupt:
                 raise
             finally:
+                kwargs['showing_answers'] = True
                 self.display_score(**kwargs)
 
 
