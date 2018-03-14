@@ -179,11 +179,28 @@ class QuestionWindow(Dialog):
                 "Bad input",
                 "Illegal values, please try again"
             )
+            self.question.user_answer = None
+
+    def validate(self):
+        """
+        Validates that the entry is only a blank or an integer
+        :return: Boolean
+        """
+        try:
+            int(self.e1.get())
+            return True
+        except ValueError:
+            return self.e1.get() == ''
 
     def ok(self, event=None):
 
         if not self.validate():
-            self.initial_focus.focus_set()  # put focus back
+            messagebox.showwarning(
+                "Bad input",
+                "Illegal values, please try again"
+            )
+            self.e1.select_range(0, len(self.e1.get()))
+            self.e1.focus_set()  # put focus back
             return
 
         self.withdraw()
@@ -259,9 +276,9 @@ class TestGUI(Tk):
             for question in self.test.question_list(self.test.get('wrong')):
                 if self.still_going:
                     q = QuestionWindow(self, question=question, title="Skipped Question", visualize=True)
+                    self.still_going = q.still_going
                     self.test.score()
                     self.update_display(**kwargs)
-                    self.still_going = q.still_going
                 else:
                     self.test.wrong.append(question)
                     break
