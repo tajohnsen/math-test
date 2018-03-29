@@ -264,9 +264,9 @@ class QuestionWindow(Dialog):
 
 
 class OptionWindow(Dialog):
-    def __init__(self, parent, in_kwargs, *args, **kwargs):
+    def __init__(self, parent, in_kwargs):
         self.parent = parent
-        self.kwargs = {}
+        self.kwargs = in_kwargs
         self.division = BooleanVar(value='/' in in_kwargs.get('valid_operators', ['/']))
         self.multiplication = BooleanVar(value='*' in in_kwargs.get('valid_operators', ['*']))
         self.addition = BooleanVar(value='+' in in_kwargs.get('valid_operators', ['+']))
@@ -364,6 +364,8 @@ class OptionWindow(Dialog):
 
     def apply(self):
         kwargs = dict(unique=True)
+        if "second_number" in self.kwargs.keys():
+            kwargs["second_number"] = self.kwargs.get("second_number")
         kwargs['valid_operators'] = []
         if self.division.get():
             kwargs['valid_operators'].append('/')
